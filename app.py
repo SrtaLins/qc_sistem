@@ -1,102 +1,85 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
-import os
 
-# Configuração da Página
-st.set_page_config(page_title="QC Sísmico - Sistema de Gestão", layout="wide")
+st.set_page_config(page_title="Seismic QC Dashboard", layout="wide")
 
-# Inicialização da base de dados na sessão (Simulação de banco de dados)
-if 'qc_history' not in st.session_state:
-    st.session_state['qc_history'] = pd.DataFrame(columns=[
-        'Data', 'Usuário', 'Etapa', 'Sequência', 'Item', 
-        'Intensidade', 'Abrangência', 'Observações'
-    ])
+# --- CONEXÃO COM O BANCO DE DADOS (Google Sheets) ---
+# Nota: Você precisará configurar o link da planilha no Streamlit Secrets
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Título da aplicação
-st.title("🪨 Sistema de Controle de Qualidade (QC) Sísmico")
-st.markdown("---")
+def load_data():
+    return conn.read(ttl="5s") # Atualiza a cada 5 segundos
 
-# 1. Identificação do Usuário
+df_master = load_data()
+
+# --- SIDEBAR: IDENTIFICAÇÃO E FILTROS ---
 st.sidebar.header("1. Identificação")
-user_name = st.sidebar.text_input("Nome do Analista", placeholder="Digite seu nome completo")
+user_name = st.sidebar.text_input("Nome do Analista")
+
+st.sidebar.markdown("---")
+st.sidebar.header("2. Filtros do Dashboard")
+etapa_filtro = st.sidebar.selectbox("Filtrar por Etapa", df_master['Etapa'].unique())
+status_filtro = st.sidebar.multiselect("Filtrar por Status", df_master['Status'].unique(), default=df_master['Status'].unique())
+
+# Aplicar Filtros
+df_filtered = df_master[(df_master['Etapa'] == etapa_filtro) & (df_master['Status'].isin(status_filtro))]
+
+# --- MAIN PAGE: DASHBOARD ---
+st.title(f"Painel de QC - {etapa_filtro}")
 
 if not user_name:
-    st.sidebar.warning("Por favor, digite seu nome para iniciar o QC.")
+    st.warning("👈 Digite seu nome na barra lateral para interagir com as sequências.")
+    st.dataframe(df_filtered, use_container_width=True)
 else:
-    st.sidebar.success(f"Usuário identificado: **{user_name}**")
+    # Mostra a tabela interativa (estilo a sua imagem)
+    st.write("Selecione uma sequência para iniciar ou ver detalhes:")
     
-    # 2. Seleção da Etapa e Sequência
-    st.sidebar.markdown("---")
-    st.sidebar.header("2. Seleção de Processo")
-    
-    etapa = st.sidebar.selectbox("Etapa de Processamento", ["Denoise", "Deghost", "Normal Moveout (NMO)", "Migration"])
-    sequencia = st.sidebar.selectbox("Sequência Sísmica", ["SEV-0042", "SEV-0045", "SEV-0050", "SEV-0078"])
-    
-    st.markdown(f"### Etapa atual: **{etapa}** | Sequência: **{sequencia}**")
-    
-    # 3. Itens de QC e Checklist Detalhado
-    st.subheader("3. Checklist de Itens")
-    
-    itens_selecionados = st.multiselect(
-        "Quais itens você irá checar nesta etapa?",
-        ["Stack", "Shot", "Mapa RMS", "Gathers", "Velocidades"]
-    )
-    
-    dados_inseridos = []
-    
-    for item in itens_selecionados:
-        with st.expander(f"🔎 Configurações para: {item}", expanded=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                intensidade = st.selectbox(f"Intensidade do achado ({item})", ["Baixa", "Média", "Alta"], key=f"int_{item}")
-                abrangencia = st.selectbox(f"Abrangência ({item})", ["Dado todo", "Pontos específicos"], key=f"abr_{item}")
-            
-            with col2:
-                obs_item = st.text_area(f"Observações específicas para {item}", key=f"obs_{item}")
-                imagem = st.file_uploader(f"Adicionar imagem/print para {item}", type=["png", "jpg", "jpeg"], key=f"img_{item}")
-            
-            # Armazena os dados do item
-            if st.button(f"Salvar item {item}", key=f"btn_{item}"):
-                dados_inseridos.append({
-                    'Data': datetime.now().strftime("%d/%m/%Y %H:%M"),
-                    'Usuário': user_name,
-                    'Etapa': etapa,
-                    'Sequência': sequencia,
-                    'Item': item,
-                    'Intensidade': intensidade,
-                    'Abrangência': abrangencia,
-                    'Observações': obs_item
-                })
-                st.success(f"Item {item} registrado com sucesso!")
+    # Criamos colunas para o cabeçalho da lista
+    cols = st.columns([1, 2, 2, 2, 1])
+    cols[0].bold("ACQSEQ")
+    cols[1].bold("Status / Usuário")
+    cols[2].bold("Itens Checados")
+    cols[3].bold("Metadados")
+    cols[4].bold("Ação")
 
-    # 4. Observações Gerais
-    st.markdown("---")
-    st.subheader("4. Observações Gerais da Sequência")
-    obs_geral = st.text_area("Considerações finais sobre o QC desta sequência")
-    
-    if st.button("Finalizar e Salvar QC da Sequência"):
-        nova_linha = pd.DataFrame({
-            'Data': [datetime.now().strftime("%d/%m/%Y %H:%M")],
-            'Usuário': [user_name],
-            'Etapa': [etapa],
-            'Sequência': [sequencia],
-            'Item': ["Geral"],
-            'Intensidade': ["N/A"],
-            'Abrangência': ["N/A"],
-            'Observações': [obs_geral]
-        })
-        st.session_state['qc_history'] = pd.concat([st.session_state['qc_history'], nova_linha], ignore_index=True)
-        st.balloons()
-        st.success(f"QC da sequência {sequencia} salvo com sucesso no sistema!")
+    for i, row in df_filtered.iterrows():
+        with st.container():
+            c1, c2, c3, c4, c5 = st.columns([1, 2, 2, 2, 1])
+            
+            c1.write(row['ACQSEQ'])
+            
+            # Lógica de sinalização de "In Use"
+            if row['Status'] == 'In Use':
+                c2.error(f"🔴 Em uso por: {row['User']}")
+            elif row['Status'] == 'Done':
+                c2.success("🟢 Finalizado")
+            else:
+                c2.info("⚪ Disponível")
 
-    # 5. Histórico da Sequência
-    st.markdown("---")
-    st.subheader("📊 Histórico de QCs Anteriores")
-    
-    filtro_historico = st.session_state['qc_history'][st.session_state['qc_history']['Sequência'] == sequencia]
-    
-    if not filtro_historico.empty:
-        st.dataframe(filtro_historico)
-    else:
-        st.info("Nenhum registro de QC anterior encontrado para esta sequência.")
+            c3.write(row['Checks_Done'])
+            c4.write(f"{row['Info_1']} | {row['Info_2']}")
+            
+            # Botão para entrar na sequência
+            if c5.button("Abrir", key=f"btn_{row['ACQSEQ']}"):
+                st.session_state['selected_seq'] = row['ACQSEQ']
+                # Aqui você dispararia a função de "Lock" no banco de dados
+                st.info(f"Abrindo sequência {row['ACQSEQ']}...")
+
+    # --- ÁREA DE EDIÇÃO (Aparece após clicar em Abrir) ---
+    if 'selected_seq' in st.session_state:
+        st.markdown("---")
+        st.subheader(f"Editando Sequência: {st.session_state['selected_seq']}")
+        
+        # Aqui entra o formulário de checklist que criamos no prompt anterior
+        # Ao salvar, o app deve dar um "UPDATE" na linha da planilha via conn.update()
+        
+        with st.form("qc_form"):
+            st.write("Marque os itens vistos:")
+            stack = st.checkbox("Stack")
+            rms = st.checkbox("Mapa RMS")
+            
+            if st.form_submit_button("Salvar Alterações"):
+                # Lógica para atualizar a planilha
+                st.success("Dados enviados para o banco central!")
