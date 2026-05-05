@@ -14,7 +14,8 @@ st.set_page_config(page_title="Seismic QC Tool", layout="wide")
 # --- CARREGAMENTO DE DADOS ---
 @st.cache_data(ttl=60)
 def get_master_data():
-    return pd.read_csv("20260320_pdb.xlsx - PandDaXlsx.csv")
+    # Agora lê o ficheiro .xlsx diretamente do seu repositório GitHub
+    return pd.read_excel("master_sequences.xlsx")
 
 def get_history():
     try:
