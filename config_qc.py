@@ -6,12 +6,12 @@ ETAPAS = {
 }
 
 ITENS_CHECK = {
-    "RotShot": ["Ruído Coerente", "Canais Mortos", "Falta de Energia"],
+    "RotShot": ["Ruído", "Canais Mortos", "Shot Morto", "si", "Artefato"],
     "Stack 2D": ["Continuidade", "Múltiplas", "Sinal/Ruído"],
     "Mapa RMS de Amplitude": ["Amplitude", "Pegada de Aquisição"]
 }
 
 CARACTERISTICAS = {
-    "Intensidade": ["Baixa", "Média", "Alta"],
-    "Abrangência": ["Dado todo", "Pontos específicos", "N/A"]
+    "Ruído": ["Intensidade", "Frequência", "Abrangência"],
+    "Si": ["Intensidade", "Abrangência"]
 }
