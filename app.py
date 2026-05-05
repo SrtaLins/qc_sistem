@@ -1,122 +1,102 @@
 import streamlit as st
 import pandas as pd
-import requests
 from datetime import datetime
+import os
 
-# --- CONFIGURAÇÕES BÁSICAS ---
-# Substitua pelo ID da sua planilha (ex: 1A2B3C4D...)
-SHEET_ID = "COLE_AQUI_O_ID_DA_SUA_PLANILHA" 
-# Seu link de implantação do Apps Script
-SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIIUSYeDX1XGIruyf1RUYpvOWAtSfjWllBXndWrYtO-qx4suXoqXycnMwLKuxrXdQ/exec"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/1fVZT7cZ1YYJdketX_zlpuL3L3dIED2nocyPlmRN9Mr0/export?format=csv"
+# Configuração da Página
+st.set_page_config(page_title="QC Sísmico - Sistema de Gestão", layout="wide")
 
-st.set_page_config(page_title="QC Sísmico Dashboard", layout="wide")
+# Inicialização da base de dados na sessão (Simulação de banco de dados)
+if 'qc_history' not in st.session_state:
+    st.session_state['qc_history'] = pd.DataFrame(columns=[
+        'Data', 'Usuário', 'Etapa', 'Sequência', 'Item', 
+        'Intensidade', 'Abrangência', 'Observações'
+    ])
 
-# --- FUNÇÕES DE DADOS ---
-def load_data():
-    try:
-        # Adicionamos um parâmetro de tempo para evitar cache do navegador
-        return pd.read_csv(f"{CSV_URL}&cachebust={datetime.now().timestamp()}")
-    except:
-        st.error("Erro ao carregar a planilha. Verifique se o ID está correto e se o acesso é público.")
-        return pd.DataFrame()
+# Título da aplicação
+st.title("🪨 Sistema de Controle de Qualidade (QC) Sísmico")
+st.markdown("---")
 
-def save_to_google(acqseq, status, user, checks):
-    payload = {
-        "acqseq": str(acqseq),
-        "status": status,
-        "user": user,
-        "checks": checks
-    }
-    try:
-        response = requests.post(SCRIPT_URL, json=payload)
-        return response.status_code == 200
-    except:
-        return False
-
-# --- INTERFACE ---
-st.title("🚜 Controle de Qualidade Sísmico")
-
-# 1. Identificação na Sidebar
-st.sidebar.header("Identificação")
-user_name = st.sidebar.text_input("Nome do Analista", placeholder="Ex: Amanda")
+# 1. Identificação do Usuário
+st.sidebar.header("1. Identificação")
+user_name = st.sidebar.text_input("Nome do Analista", placeholder="Digite seu nome completo")
 
 if not user_name:
-    st.info("👈 Por favor, identifique-se na barra lateral para começar.")
-    st.stop()
-
-# 2. Carregamento e Filtros
-df = load_data()
-
-if not df.empty:
-    st.sidebar.markdown("---")
-    st.sidebar.header("Filtros")
-    etapa_opt = df['Etapa'].unique()
-    etapa_sel = st.sidebar.selectbox("Selecionar Etapa", etapa_opt)
-    
-    # Dashboard Principal
-    df_filt = df[df['Etapa'] == etapa_sel]
-    
-    st.subheader(f"Dashboard: {etapa_sel}")
-    
-    # Cabeçalho da Tabela
-    h1, h2, h3, h4 = st.columns([1, 2, 3, 1])
-    h1.bold("ACQSEQ")
-    h2.bold("Status / Usuário")
-    h3.bold("Itens Checados")
-    h4.bold("Ação")
-    st.markdown("---")
-
-    for _, row in df_filt.iterrows():
-        c1, c2, c3, c4 = st.columns([1, 2, 3, 1])
-        
-        c1.write(f"**{row['ACQSEQ']}**")
-        
-        # Lógica de cores para Status
-        if row['Status'] == 'In Use':
-            c2.error(f"🔴 Em uso por: {row['User']}")
-        elif row['Status'] == 'Done':
-            c2.success(f"🟢 Finalizado por: {row['User']}")
-        else:
-            c2.info("⚪ Disponível")
-            
-        c3.write(row['Checks_Done'] if pd.notna(row['Checks_Done']) else "-")
-        
-        if c4.button("Abrir", key=f"open_{row['ACQSEQ']}"):
-            st.session_state['active_seq'] = row['ACQSEQ']
-            # Opcional: Marcar como "In Use" automaticamente ao abrir
-            save_to_google(row['ACQSEQ'], "In Use", user_name, row['Checks_Done'])
-            st.rerun()
-
-    # --- FORMULÁRIO DE QC (Aparece abaixo ao selecionar uma sequência) ---
-    if 'active_seq' in st.session_state:
-        seq_id = st.session_state['active_seq']
-        st.markdown("---")
-        st.header(f"📝 Editando Sequência: {seq_id}")
-        
-        with st.form("form_qc"):
-            col_a, col_b = st.columns(2)
-            
-            with col_a:
-                itens = st.multiselect("Itens para conferência", ["Stack", "Shot", "Mapa RMS", "Gathers", "Velocidades"])
-                intensidade = st.select_slider("Intensidade do achado", options=["N/A", "Baixa", "Média", "Alta"])
-            
-            with col_b:
-                abrangencia = st.radio("Abrangência", ["Dado todo", "Pontos específicos", "N/A"], horizontal=True)
-                obs = st.text_area("Observações Detalhadas")
-                img = st.file_uploader("Upload de print/imagem", type=["png", "jpg"])
-
-            # Botão de submissão do formulário
-            if st.form_submit_button("Salvar e Finalizar QC"):
-                res_str = f"{' | '.join(itens)} ({intensidade})"
-                if save_to_google(seq_id, "Done", user_name, res_str):
-                    st.success(f"QC da sequência {seq_id} salvo!")
-                    del st.session_state['active_seq']
-                    st.rerun()
-                else:
-                    st.error("Erro ao salvar. Verifique o Script.")
-
-    if st.button("🔄 Atualizar Dashboard"):
-        st.rerun()
+    st.sidebar.warning("Por favor, digite seu nome para iniciar o QC.")
 else:
-    st.warning("Aguardando dados da planilha...")
+    st.sidebar.success(f"Usuário identificado: **{user_name}**")
+    
+    # 2. Seleção da Etapa e Sequência
+    st.sidebar.markdown("---")
+    st.sidebar.header("2. Seleção de Processo")
+    
+    etapa = st.sidebar.selectbox("Etapa de Processamento", ["Denoise", "Deghost", "Normal Moveout (NMO)", "Migration"])
+    sequencia = st.sidebar.selectbox("Sequência Sísmica", ["SEV-0042", "SEV-0045", "SEV-0050", "SEV-0078"])
+    
+    st.markdown(f"### Etapa atual: **{etapa}** | Sequência: **{sequencia}**")
+    
+    # 3. Itens de QC e Checklist Detalhado
+    st.subheader("3. Checklist de Itens")
+    
+    itens_selecionados = st.multiselect(
+        "Quais itens você irá checar nesta etapa?",
+        ["Stack", "Shot", "Mapa RMS", "Gathers", "Velocidades"]
+    )
+    
+    dados_inseridos = []
+    
+    for item in itens_selecionados:
+        with st.expander(f"🔎 Configurações para: {item}", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                intensidade = st.selectbox(f"Intensidade do achado ({item})", ["Baixa", "Média", "Alta"], key=f"int_{item}")
+                abrangencia = st.selectbox(f"Abrangência ({item})", ["Dado todo", "Pontos específicos"], key=f"abr_{item}")
+            
+            with col2:
+                obs_item = st.text_area(f"Observações específicas para {item}", key=f"obs_{item}")
+                imagem = st.file_uploader(f"Adicionar imagem/print para {item}", type=["png", "jpg", "jpeg"], key=f"img_{item}")
+            
+            # Armazena os dados do item
+            if st.button(f"Salvar item {item}", key=f"btn_{item}"):
+                dados_inseridos.append({
+                    'Data': datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    'Usuário': user_name,
+                    'Etapa': etapa,
+                    'Sequência': sequencia,
+                    'Item': item,
+                    'Intensidade': intensidade,
+                    'Abrangência': abrangencia,
+                    'Observações': obs_item
+                })
+                st.success(f"Item {item} registrado com sucesso!")
+
+    # 4. Observações Gerais
+    st.markdown("---")
+    st.subheader("4. Observações Gerais da Sequência")
+    obs_geral = st.text_area("Considerações finais sobre o QC desta sequência")
+    
+    if st.button("Finalizar e Salvar QC da Sequência"):
+        nova_linha = pd.DataFrame({
+            'Data': [datetime.now().strftime("%d/%m/%Y %H:%M")],
+            'Usuário': [user_name],
+            'Etapa': [etapa],
+            'Sequência': [sequencia],
+            'Item': ["Geral"],
+            'Intensidade': ["N/A"],
+            'Abrangência': ["N/A"],
+            'Observações': [obs_geral]
+        })
+        st.session_state['qc_history'] = pd.concat([st.session_state['qc_history'], nova_linha], ignore_index=True)
+        st.balloons()
+        st.success(f"QC da sequência {sequencia} salvo com sucesso no sistema!")
+
+    # 5. Histórico da Sequência
+    st.markdown("---")
+    st.subheader("📊 Histórico de QCs Anteriores")
+    
+    filtro_historico = st.session_state['qc_history'][st.session_state['qc_history']['Sequência'] == sequencia]
+    
+    if not filtro_historico.empty:
+        st.dataframe(filtro_historico)
+    else:
+        st.info("Nenhum registro de QC anterior encontrado para esta sequência.")
