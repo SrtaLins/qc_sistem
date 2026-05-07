@@ -5,8 +5,9 @@ from datetime import datetime
 import config_qc as cfg
 
 # --- CONFIGURAÇÕES ---
-SHEET_ID = "1fVZT7cZ1YYJdketX_zlpuL3L3dIED2nocyPlmRN9Mr0"
-GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/1fVZT7cZ1YYJdketX_zlpuL3L3dIED2nocyPlmRN9Mr0/export?format=csv"
+# Substitua pelo seu ID e URL do Script
+SHEET_ID = "SEU_ID_DA_PLANILHA_AQUI"
+GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIIUSYeDX1XGIruyf1RUYpvOWAtSfjWllBXndWrYtO-qx4suXoqXycnMwLKuxrXdQ/exec"
 
 st.set_page_config(page_title="Seismic QC Tool", layout="wide")
@@ -14,74 +15,114 @@ st.set_page_config(page_title="Seismic QC Tool", layout="wide")
 # --- CARREGAMENTO DE DADOS ---
 @st.cache_data(ttl=60)
 def get_master_data():
-    # Agora lê o ficheiro .xlsx diretamente do seu repositório GitHub
+    # Lendo o arquivo Excel diretamente (certifique-se de ter 'openpyxl' no requirements.txt)
     return pd.read_excel("master_sequences.xlsx")
 
 def get_history():
     try:
-        return pd.read_csv(f"{GOOGLE_SHEET_URL}&cache={datetime.now().timestamp()}")
+        # Puxa o histórico da planilha do Google
+        df = pd.read_csv(f"{GOOGLE_SHEET_URL}&cache={datetime.now().timestamp()}")
+        # Garante que as colunas de ID sejam strings para comparação
+        df['ACQSEQ'] = df['ACQSEQ'].astype(str)
+        return df
     except:
         return pd.DataFrame(columns=["Data", "User", "ACQSEQ", "Etapa", "Checks"])
 
-df_master = get_master_data()
-df_history = get_history()
-
-# --- INTERFACE ---
-st.sidebar.header("Usuário")
-user = st.sidebar.text_input("Identifique-se")
-
-if not user:
-    st.warning("Por favor, digite seu nome na lateral.")
+# Carregar dados
+try:
+    df_master = get_master_data()
+    df_master['ACQSEQ'] = df_master['ACQSEQ'].astype(str)
+except Exception as e:
+    st.error(f"Erro ao carregar master_sequences.xlsx: {e}")
     st.stop()
 
+df_history = get_history()
+
+# --- INTERFACE LATERAL ---
+st.sidebar.header("Configurações")
+user = st.sidebar.text_input("Identifique-se", placeholder="Nome do Analista")
 etapa_ativa = st.sidebar.selectbox("Etapa de QC", list(cfg.ETAPAS.keys()))
 
-# Dashboard
-st.subheader(f"Sequências - {etapa_ativa}")
-projeto = st.sidebar.selectbox("Projeto", df_master['PROJECT'].unique())
-df_view = df_master[df_master['PROJECT'] == projeto]
+if not user:
+    st.warning("Aguardando identificação do usuário...")
+    st.stop()
 
-for _, row in df_view.iterrows():
-    seq = row['ACQSEQ']
-    cols = st.columns([1, 2, 1])
-    cols[0].write(f"**{seq}**")
-    
-    # Verifica se já existe QC para esta sequência E etapa
-    has_qc = not df_history[(df_history['ACQSEQ'] == str(seq)) & (df_history['Etapa'] == etapa_ativa)].empty
-    cols[1].write("✅ Concluído" if has_qc else "⚪ Pendente")
-    
-    if cols[2].button("Abrir", key=f"btn_{seq}"):
-        st.session_state['current_seq'] = seq
-        st.rerun()
+# --- PROCESSAMENTO DA TABELA DE SEQUÊNCIAS ---
+st.title(f"Monitoramento de Sequências - {etapa_ativa}")
 
-# --- FORMULÁRIO DINÂMICO ---
+# 1. Preparar informações obrigatórias
+# Agrupamos o histórico para ver o que foi feito nesta etapa por sequência
+hist_etapa = df_history[df_history['Etapa'] == etapa_ativa]
+summary_history = hist_etapa.groupby('ACQSEQ')['Checks'].apply(lambda x: " | ".join(x)).reset_index()
+summary_history.columns = ['ACQSEQ', 'Itens feitos nesta etapa']
+
+# Criar DataFrame de exibição
+df_display = df_master.copy()
+df_display = df_display.merge(summary_history, on='ACQSEQ', how='left')
+
+# Lógica "Em uso" (Exemplo: se houver qualquer registro no histórico geral)
+em_uso_ids = df_history['ACQSEQ'].unique()
+df_display['Em uso'] = df_display['ACQSEQ'].apply(lambda x: "Sim" if x in em_uso_ids else "Não")
+
+# Renomear coluna obrigatória
+df_display = df_display.rename(columns={'ACQSEQ': 'Sequência'})
+
+# 2. Seleção Dinâmica de Colunas
+cols_obrigatorias = ['Sequência', 'Em uso', 'Itens feitos nesta etapa']
+todas_as_colunas = df_display.columns.tolist()
+colunas_adicionais = [c for c in todas_as_colunas if c not in cols_obrigatorias]
+
+with st.expander("⚙️ Configurar Colunas da Tabela"):
+    colunas_escolhidas = st.multiselect(
+        "Escolha colunas extras para visualizar:",
+        options=colunas_adicionais,
+        default=[]
+    )
+
+# Tabela Final filtrada pelas colunas escolhidas
+colunas_finais = cols_obrigatorias + colunas_escolhidas
+df_final = df_display[colunas_finais].fillna("-")
+
+# Exibição da Tabela (Filtros nativos habilitados)
+st.write("Dica: Use os ícones nas colunas para filtrar ou ordenar.")
+st.dataframe(df_final, use_container_width=True, hide_index=True)
+
+# --- SELEÇÃO PARA QC ---
+st.markdown("---")
+col_sel, _ = st.columns([1, 2])
+with col_sel:
+    seq_para_editar = st.selectbox(
+        "Selecione uma sequência para iniciar o QC:",
+        options=df_master['ACQSEQ'].unique(),
+        index=None,
+        placeholder="Escolha o ID da Sequência"
+    )
+
+if seq_para_editar:
+    st.session_state['current_seq'] = seq_para_editar
+
+# --- FORMULÁRIO DINÂMICO (Mantido da versão anterior) ---
 if 'current_seq' in st.session_state:
     seq_id = st.session_state['current_seq']
-    st.markdown("---")
-    st.header(f"Inserindo QC: {seq_id} ({etapa_ativa})")
+    st.header(f"📝 Inserindo QC: {seq_id} ({etapa_ativa})")
     
     with st.form("form_qc"):
         item_tipo = st.selectbox("Tipo de Dado", cfg.ETAPAS[etapa_ativa])
         sub_itens = st.multiselect("O que foi identificado?", cfg.ITENS_CHECK.get(item_tipo, []))
         
         resultados = []
-        
-        # Loop dinâmico: para cada sub-item selecionado, cria os inputs do config
         for sub in sub_itens:
             st.markdown(f"**Detalhes de: {sub}**")
             attrs = cfg.CARACTERISTICAS.get(sub, ["Padrão"])
             c = st.columns(len(attrs))
-            
             res_sub = []
             for i, attr in enumerate(attrs):
-                # Busca as opções no dicionário OPCOES, se não houver usa campo de texto
                 opcoes = cfg.OPCOES.get(attr)
                 if opcoes:
                     val = c[i].selectbox(attr, opcoes, key=f"{seq_id}_{sub}_{attr}")
                 else:
                     val = c[i].text_input(attr, key=f"{seq_id}_{sub}_{attr}")
                 res_sub.append(f"{attr}: {val}")
-            
             resultados.append(f"[{sub} -> {', '.join(res_sub)}]")
 
         obs = st.text_area("Observações Gerais")
@@ -94,7 +135,10 @@ if 'current_seq' in st.session_state:
                 "user": user,
                 "checks": f"[{etapa_ativa}] {final_checks}"
             }
-            requests.post(SCRIPT_URL, json=payload)
-            st.success("QC Registrado!")
-            del st.session_state['current_seq']
-            st.rerun()
+            try:
+                requests.post(SCRIPT_URL, json=payload)
+                st.success("QC Registrado com Sucesso!")
+                del st.session_state['current_seq']
+                st.rerun()
+            except:
+                st.error("Erro ao conectar com o Google Sheets.")
