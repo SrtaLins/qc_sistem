@@ -32,16 +32,17 @@ df_history = get_history()
 
 # --- INTERFACE LATERAL ---
 st.sidebar.header("Identificação")
-user = st.sidebar.text_input("Nome do Analista")
+user = st.sidebar.text_input("Nome do Analista", key="user_name")
 etapa_ativa = st.sidebar.selectbox("Etapa de QC", list(cfg.ETAPAS.keys()))
 
 if not user:
-    st.warning("Identifique-se na lateral para liberar o sistema.")
+    st.warning("👈 Identifique-se na lateral para começar.")
     st.stop()
 
 # --- TABELA DE MONITORAMENTO ---
 st.title(f"Monitoramento - {etapa_ativa}")
 
+# Processamento do histórico para a tabela
 hist_etapa = df_history[df_history['Etapa'] == etapa_ativa]
 summary_history = hist_etapa.groupby('ACQSEQ')['Checks'].apply(lambda x: " | ".join(x)).reset_index()
 summary_history.columns = ['ACQSEQ', 'Itens feitos']
@@ -55,6 +56,7 @@ cols_base = ['Sequência', 'Em uso', 'Itens feitos']
 extras = st.multiselect("Ver colunas extras:", [c for c in df_display.columns if c not in cols_base])
 df_final = df_display[cols_base + extras].fillna("-")
 
+# Tabela interativa
 event = st.dataframe(
     df_final, 
     use_container_width=True, 
@@ -66,72 +68,78 @@ event = st.dataframe(
 if event.selection.rows:
     st.session_state['current_seq'] = df_final.iloc[event.selection.rows[0]]['Sequência']
 
-# --- FORMULÁRIO DE QC (ESTILO IMAGEM) ---
+# --- FORMULÁRIO DE QC REATIVO ---
 if 'current_seq' in st.session_state:
     seq_id = st.session_state['current_seq']
     st.markdown("---")
     st.subheader(f"📝 QC da Sequência: {seq_id}")
 
-    # 1. Listagem de Tipos (Usando Pills como na imagem)
+    # 1. Seleção do Tipo (PILLS)
     tipos_disponiveis = cfg.ETAPAS[etapa_ativa] + ["Observação"]
-    tipo_selecionado = st.pills("Selecione o Tipo de Dado:", tipos_disponiveis, default=tipos_disponiveis[0])
+    tipo_selecionado = st.pills("Tipo de Dado:", tipos_disponiveis, selection_mode="single", default=tipos_disponiveis[0])
 
-    with st.form("form_qc_detalhes"):
-        detalhes_qc = []
+    # Lista onde guardaremos os dados para salvar
+    dados_para_salvar = []
+
+    if tipo_selecionado == "Observação":
+        obs_geral = st.text_area("Escreva aqui as observações gerais da sequência:", key="obs_geral")
+        if obs_geral:
+            dados_para_salvar.append(f"OBS GERAL: {obs_geral}")
+    else:
+        # Multiselect REATIVO (fora do form)
+        itens_vistos = st.multiselect(
+            f"O que foi visto em {tipo_selecionado}?", 
+            cfg.ITENS_CHECK.get(tipo_selecionado, []),
+            key=f"ms_{tipo_selecionado}"
+        )
         
-        # Caso seja um tipo técnico (RotShot, Stack, etc)
-        if tipo_selecionado != "Observação":
-            itens = st.multiselect(f"O que foi visto em {tipo_selecionado}?", cfg.ITENS_CHECK.get(tipo_selecionado, []))
+        # Para cada item selecionado, as opções aparecem na hora
+        for item in itens_vistos:
+            st.markdown(f"**Configuração de {item}:**")
+            caracteristicas = cfg.CARACTERISTICAS.get(item, [])
             
-            for item in itens:
-                st.markdown(f"**Configuração de {item}:**")
-                caracteristicas = cfg.CARACTERISTICAS.get(item, [])
+            if caracteristicas:
+                cols = st.columns(len(caracteristicas))
+                res_item = []
+                for i, attr in enumerate(caracteristicas):
+                    opcoes = ["-"] + cfg.OPCOES.get(attr, [])
+                    escolha = cols[i].selectbox(attr, opcoes, key=f"attr_{seq_id}_{item}_{attr}")
+                    if escolha != "-":
+                        res_item.append(f"{attr}: {escolha}")
                 
-                # Criar colunas para os atributos
-                if caracteristicas:
-                    cols = st.columns(len(caracteristicas))
-                    res_item = []
-                    for i, (attr) in enumerate(caracteristicas):
-                        opcoes = ["-"] + cfg.OPCOES.get(attr, []) # Adiciona "-" para ser opcional
-                        escolha = cols[i].selectbox(attr, opcoes, key=f"{seq_id}_{item}_{attr}")
-                        if escolha != "-":
-                            res_item.append(f"{attr}: {escolha}")
-                    
-                    if res_item:
-                        detalhes_qc.append(f"{item} ({', '.join(res_item)})")
-                    else:
-                        detalhes_qc.append(item)
-                else:
-                    detalhes_qc.append(item)
-            
-            st.write("---")
-            obs_tipo = st.text_input(f"Observação específica para {tipo_selecionado}")
-            if obs_tipo:
-                detalhes_qc.append(f"Obs_{tipo_selecionado}: {obs_tipo}")
+                # Monta a string do item com seus atributos
+                detalhe = f"{item} ({', '.join(res_item)})" if res_item else item
+                dados_para_salvar.append(detalhe)
+            else:
+                dados_para_salvar.append(item)
+        
+        st.write("---")
+        obs_tipo = st.text_input(f"Observação específica para {tipo_selecionado}", key="obs_especifica")
+        if obs_tipo:
+            dados_para_salvar.append(f"Obs_{tipo_selecionado}: {obs_tipo}")
 
-        # Caso seja apenas Observação Geral
-        else:
-            obs_geral = st.text_area("Escreva aqui as observações gerais da sequência:")
-            if obs_geral:
-                detalhes_qc.append(f"OBS GERAL: {obs_geral}")
-
-        # Botões de ação
-        c1, c2 = st.columns([1, 4])
-        if c1.form_submit_button("💾 Salvar"):
-            if detalhes_qc:
-                payload = {
-                    "acqseq": str(seq_id),
-                    "status": "Done",
-                    "user": user,
-                    "checks": f"[{etapa_ativa}][{tipo_selecionado}] " + " | ".join(detalhes_qc)
-                }
+    # Botões de Ação
+    col_save, col_cancel = st.columns([1, 5])
+    
+    if col_save.button("💾 Salvar QC"):
+        if dados_para_salvar:
+            payload = {
+                "acqseq": str(seq_id),
+                "status": "Done",
+                "user": user,
+                "checks": f"[{etapa_ativa}][{tipo_selecionado}] " + " | ".join(dados_para_salvar)
+            }
+            try:
                 requests.post(SCRIPT_URL, json=payload)
-                st.success("QC salvo com sucesso!")
+                st.success(f"QC da Sequência {seq_id} salvo!")
+                # Limpa a seleção e recarrega
                 del st.session_state['current_seq']
                 st.rerun()
-            else:
-                st.warning("Nenhuma informação selecionada para salvar.")
-                
-        if c2.form_submit_button("❌ Cancelar"):
-            del st.session_state['current_seq']
-            st.rerun()
+            except:
+                st.error("Erro ao conectar com a planilha.")
+        else:
+            st.warning("Selecione algum item ou escreva uma observação antes de salvar.")
+
+    if col_cancel.button("❌ Cancelar"):
+        del st.session_state['current_seq']
+        st.rerun()
