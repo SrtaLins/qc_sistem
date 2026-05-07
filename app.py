@@ -69,16 +69,16 @@ extras = st.multiselect("Colunas Adicionais:", [c for c in df_display.columns if
 
 df_final = df_display[cols_base + extras].fillna("-")
 
-# --- TABELA COM SELEÇÃO (Requer Streamlit 1.35.0+) ---
+# --- TABELA COM SELEÇÃO ---
 st.markdown("### Selecione uma linha para abrir o formulário")
 
-# Captura o evento de seleção
+# Captura o evento de seleção (Corrigido para single-row com hífen)
 event = st.dataframe(
     df_final,
     use_container_width=True,
     hide_index=True,
     on_select="rerun",
-    selection_mode="single_row"
+    selection_mode="single-row" 
 )
 
 # Lógica de seleção
