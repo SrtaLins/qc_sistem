@@ -5,22 +5,23 @@ from datetime import datetime
 import config_qc as cfg
 
 # --- CONFIGURAÇÕES ---
-SHEET_ID = "SEU_ID_DA_PLANILHA_AQUI"
+SHEET_ID = "SEU_ID_AQUI"
 GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIIUSYeDX1XGIruyf1RUYpvOWAtSfjWllBXndWrYtO-qx4suXoqXycnMwLKuxrXdQ/exec"
 
 st.set_page_config(page_title="Seismic QC Tool", layout="wide")
 
-# --- CARREGAMENTO E LIMPEZA DE DADOS ---
+# --- CARREGAMENTO E LIMPEZA ---
 @st.cache_data(ttl=60)
 def get_master_data():
-    # Lê o Excel
     df = pd.read_excel("master_sequences.xlsx")
     
-    # 1. Remove linhas onde a sequência está vazia
+    # Limpeza profunda da sequência
+    # 1. Converte para numérico, transformando erros em NaN
+    df['ACQSEQ'] = pd.to_numeric(df['ACQSEQ'], errors='coerce')
+    # 2. Remove linhas onde a sequência é nula ou vazia
     df = df.dropna(subset=['ACQSEQ'])
-    
-    # 2. Converte para número inteiro (remove o .0) e depois para string
+    # 3. Converte para inteiro (tira o .0) e depois para texto
     df['ACQSEQ'] = df['ACQSEQ'].astype(int).astype(str)
     
     return df
@@ -28,123 +29,102 @@ def get_master_data():
 def get_history():
     try:
         df = pd.read_csv(f"{GOOGLE_SHEET_URL}&cache={datetime.now().timestamp()}")
+        # Garante que a coluna de comparação seja string
         df['ACQSEQ'] = df['ACQSEQ'].astype(str)
         return df
     except:
         return pd.DataFrame(columns=["Data", "User", "ACQSEQ", "Etapa", "Checks"])
 
-# Tentar carregar os dados
-try:
-    df_master = get_master_data()
-except Exception as e:
-    st.error(f"Erro ao carregar master_sequences.xlsx: {e}")
-    st.stop()
-
+# Carregar dados
+df_master = get_master_data()
 df_history = get_history()
 
-# --- INTERFACE LATERAL ---
-st.sidebar.header("Configurações")
-user = st.sidebar.text_input("Identifique-se", placeholder="Nome do Analista")
+# --- INTERFACE ---
+st.sidebar.header("Identificação")
+user = st.sidebar.text_input("Seu Nome")
 etapa_ativa = st.sidebar.selectbox("Etapa de QC", list(cfg.ETAPAS.keys()))
 
 if not user:
-    st.warning("Por favor, identifique-se na lateral para continuar.")
+    st.warning("👈 Digite seu nome na lateral para começar.")
     st.stop()
 
-# --- MONITORAMENTO DE SEQUÊNCIAS ---
-st.title(f"Monitoramento de Sequências - {etapa_ativa}")
+st.title(f"Monitoramento: {etapa_ativa}")
 
-# Preparar dados para a tabela
+# Preparar Tabela
 hist_etapa = df_history[df_history['Etapa'] == etapa_ativa]
 summary_history = hist_etapa.groupby('ACQSEQ')['Checks'].apply(lambda x: " | ".join(x)).reset_index()
-summary_history.columns = ['ACQSEQ', 'Itens feitos nesta etapa']
+summary_history.columns = ['ACQSEQ', 'Itens feitos']
 
 df_display = df_master.copy()
 df_display = df_display.merge(summary_history, on='ACQSEQ', how='left')
 
+# Marcar se está em uso (independente da etapa)
 em_uso_ids = df_history['ACQSEQ'].unique()
 df_display['Em uso'] = df_display['ACQSEQ'].apply(lambda x: "Sim" if x in em_uso_ids else "Não")
+
+# Ajuste de colunas
 df_display = df_display.rename(columns={'ACQSEQ': 'Sequência'})
+cols_base = ['Sequência', 'Em uso', 'Itens feitos']
+extras = st.multiselect("Colunas Adicionais:", [c for c in df_display.columns if c not in cols_base])
 
-# Configuração de Colunas
-cols_obrigatorias = ['Sequência', 'Em uso', 'Itens feitos nesta etapa']
-colunas_adicionais = [c for c in df_display.columns if c not in cols_obrigatorias]
+df_final = df_display[cols_base + extras].fillna("-")
 
-with st.expander("⚙️ Configurar Colunas Extras"):
-    colunas_escolhidas = st.multiselect("Adicionar dados técnicos:", options=colunas_adicionais)
+# --- TABELA COM SELEÇÃO (Requer Streamlit 1.35.0+) ---
+st.markdown("### Selecione uma linha para abrir o formulário")
 
-colunas_finais = cols_obrigatorias + colunas_escolhidas
-df_final = df_display[colunas_finais].fillna("-")
-
-# --- TABELA COM SELEÇÃO DE LINHA ---
-st.info("Clique em uma linha para selecionar a sequência e abrir o formulário de QC.")
-
-# O parâmetro on_select="rerun" e selection_mode="single_row" permite capturar o clique
+# Captura o evento de seleção
 event = st.dataframe(
     df_final,
     use_container_width=True,
     hide_index=True,
-    selection_mode="single_row",
-    on_select="rerun"
+    on_select="rerun",
+    selection_mode="single_row"
 )
 
-# Verifica se o usuário selecionou alguma linha
-if len(event.selection.rows) > 0:
-    selected_index = event.selection.rows[0]
-    # Busca o valor da 'Sequência' na linha clicada
-    st.session_state['current_seq'] = df_final.iloc[selected_index]['Sequência']
+# Lógica de seleção
+if event.selection.rows:
+    idx = event.selection.rows[0]
+    st.session_state['current_seq'] = df_final.iloc[idx]['Sequência']
 
-# --- FORMULÁRIO DE QC ---
+# --- FORMULÁRIO ---
 if 'current_seq' in st.session_state:
     seq_id = st.session_state['current_seq']
-    st.markdown("---")
-    st.header(f"📝 Formulário de QC: Sequência {seq_id}")
-    st.subheader(f"Etapa: {etapa_ativa}")
-
+    st.divider()
+    st.subheader(f"📝 Formulário de QC: {seq_id}")
+    
     with st.form("form_qc"):
         item_tipo = st.selectbox("Tipo de Dado", cfg.ETAPAS[etapa_ativa])
-        sub_itens = st.multiselect("Identificações encontradas:", cfg.ITENS_CHECK.get(item_tipo, []))
+        sub_itens = st.multiselect("Identificações:", cfg.ITENS_CHECK.get(item_tipo, []))
         
-        resultados = []
+        repostas_form = []
         for sub in sub_itens:
-            st.write(f"---")
-            st.markdown(f"**Detalhes de: {sub}**")
+            st.markdown(f"**{sub}**")
             attrs = cfg.CARACTERISTICAS.get(sub, ["Padrão"])
             cols = st.columns(len(attrs))
             
             res_sub = []
             for i, attr in enumerate(attrs):
                 opcoes = cfg.OPCOES.get(attr)
-                if opcoes:
-                    val = cols[i].selectbox(attr, opcoes, key=f"form_{seq_id}_{sub}_{attr}")
-                else:
-                    val = cols[i].text_input(attr, key=f"form_{seq_id}_{sub}_{attr}")
+                key = f"{seq_id}_{sub}_{attr}"
+                val = cols[i].selectbox(attr, opcoes, key=key) if opcoes else cols[i].text_input(attr, key=key)
                 res_sub.append(f"{attr}: {val}")
-            resultados.append(f"[{sub}: {', '.join(res_sub)}]")
+            repostas_form.append(f"[{sub} -> {', '.join(res_sub)}]")
 
-        st.write("---")
-        obs = st.text_area("Observações Gerais / Justificativas")
+        obs = st.text_area("Notas Gerais")
         
-        col_btn1, col_btn2 = st.columns([1, 5])
-        with col_btn1:
-            submit = st.form_submit_button("💾 Salvar QC")
-        with col_btn2:
-            if st.form_submit_button("❌ Cancelar"):
-                del st.session_state['current_seq']
-                st.rerun()
-
-        if submit:
-            final_checks = " | ".join(resultados) + (f" | Obs: {obs}" if obs else "")
+        c1, c2 = st.columns([1, 4])
+        if c1.form_submit_button("Salvar"):
             payload = {
                 "acqseq": str(seq_id),
                 "status": "Done",
                 "user": user,
-                "checks": f"[{etapa_ativa}] {final_checks}"
+                "checks": f"[{etapa_ativa}] {' | '.join(repostas_form)} | Obs: {obs}"
             }
-            try:
-                requests.post(SCRIPT_URL, json=payload)
-                st.success(f"QC da Sequência {seq_id} salvo com sucesso!")
-                del st.session_state['current_seq']
-                st.rerun()
-            except:
-                st.error("Erro ao enviar dados para a planilha. Verifique sua conexão.")
+            requests.post(SCRIPT_URL, json=payload)
+            st.success("Salvo!")
+            del st.session_state['current_seq']
+            st.rerun()
+            
+        if c2.form_submit_button("Cancelar"):
+            del st.session_state['current_seq']
+            st.rerun()
