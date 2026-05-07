@@ -10,19 +10,19 @@ ETAPAS = {
 # 2. IDENTIFICAÇÃO (O que ele seleciona para analisar, dependendo da etapa)
 ITENS_CHECK = {
     # Itens do Primeiro Quadro (RotShot)
-    "RotShot": ["Ruído", "SI", "Artefato", "Falta de energia", "Frequência", "Falta de dado", "Geometria"],
+    "RotShot": ["Ruído", "SI", "Artefato", "Falta de energia", "Frequência", "Falta de dado", "Geometria", "OK"],
     
     # Itens do Segundo Quadro (Stacks)
-    "Stack 2D": ["Artefato", "Múltipla", "Sinal/Ruído", "Continuidade", "Falta de dado", "Frequência", "Pegada de aquisição"],
-    "Stack 3D": ["Artefato", "Múltipla", "Sinal/Ruído", "Continuidade", "Falta de dado", "Frequência", "Pegada de aquisição"],
+    "Stack 2D": ["Artefato", "Múltipla", "Sinal/Ruído", "Continuidade", "Falta de dado", "Frequência", "Pegada de aquisição", "OK"],
+    "Stack 3D": ["Artefato", "Múltipla", "Sinal/Ruído", "Continuidade", "Falta de dado", "Frequência", "Pegada de aquisição", "OK"],
     
     # Itens do Terceiro Quadro (CMP 2D / 3D)
-    "CMP 2D": ["Artefato", "Falta de dado", "Frequência", "Mute", "Estática", "Velocidade", "Sinal/Ruído", "Múltipla"],
-    "CMP 3D": ["Artefato", "Falta de dado", "Frequência", "Mute", "Estática", "Velocidade", "Sinal/Ruído", "Múltipla"],
+    "CMP 2D": ["Artefato", "Falta de dado", "Frequência", "Mute", "Estática", "Velocidade", "Sinal/Ruído", "Múltipla", "OK"],
+    "CMP 3D": ["Artefato", "Falta de dado", "Frequência", "Mute", "Estática", "Velocidade", "Sinal/Ruído", "Múltipla", "OK"],
 
     # Extrapolações mantidas
-    "Mapa RMS de Amplitude": ["Artefato", "Sinal/Ruído", "Falta de dado", "Pegada de aquisição"],
-    "Espectro de Amplitude": ["Largura de Banda", "Corte de Frequência"]
+    "Mapa RMS de Amplitude": ["Artefato", "Sinal/Ruído", "Falta de dado", "Pegada de aquisição", "OK"],
+    "Espectro de Amplitude": ["Largura de Banda", "Corte de Frequência", "OK"]
 }
 
 # 3. CARACTERÍSTICAS (Os inputs que aparecem na tela para cada item selecionado)
