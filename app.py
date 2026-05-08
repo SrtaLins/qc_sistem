@@ -5,8 +5,8 @@ from datetime import datetime
 import config_qc as cfg
 
 # --- CONFIGURAÇÕES ---
-SHEET_ID = "SEU_ID_DA_PLANILHA"
-GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
+SHEET_ID = "1fVZT7cZ1YYJdketX_zlpuL3L3dIED2nocyPlmRN9Mr0"
+GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/1fVZT7cZ1YYJdketX_zlpuL3L3dIED2nocyPlmRN9Mr0/export?format=csv"
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIIUSYeDX1XGIruyf1RUYpvOWAtSfjWllBXndWrYtO-qx4suXoqXycnMwLKuxrXdQ/exec"
 
 # Opções de atributos padrão caso não existam no config_qc.py
