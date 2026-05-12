@@ -194,16 +194,20 @@ if 'current_seq' in st.session_state:
     
     if col_save.button("💾 Salvar QC"):
         if linhas_para_salvar:
-            try:
-                requests.post(SCRIPT_URL, json=linhas_para_salvar)
-                st.success(f"QC da Sequência {seq_id} salvo!")
-                del st.session_state['current_seq']
-                st.rerun()
-            except:
-                st.error("Erro ao conectar com a planilha.")
+            with st.spinner("Enviando dados..."):
+                try:
+                    # Enviando com timeout para não travar
+                    res = requests.post(SCRIPT_URL, json=linhas_para_salvar, timeout=10)
+                    
+                    if res.status_code == 200:
+                        st.success(f"✅ Sucesso! Resposta do Google: {res.text}")
+                        # Limpa o estado e recarrega
+                        st.session_state.pop('current_seq', None)
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Erro no Google (Status {res.status_code})")
+                        st.info(f"Detalhe técnico: {res.text}")
+                except Exception as e:
+                    st.error(f"❌ Erro de conexão: {str(e)}")
         else:
             st.warning("Selecione itens ou escreva uma observação para salvar.")
-
-    if col_cancel.button("❌ Cancelar"):
-        del st.session_state['current_seq']
-        st.rerun()
