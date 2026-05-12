@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from datetime import datetime
 import config_qc as cfg
-
+    
 # --- CONFIGURAÇÕES ---
 SHEET_ID = "1fVZT7cZ1YYJdketX_zlpuL3L3dIED2nocyPlmRN9Mr0"
 GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/1fVZT7cZ1YYJdketX_zlpuL3L3dIED2nocyPlmRN9Mr0/export?format=csv"
@@ -191,23 +191,40 @@ if 'current_seq' in st.session_state:
 
     # Botões de Ação
     col_save, col_cancel = st.columns([1, 5])
+
+    # --- EXIBIÇÃO DE FEEDBACK APÓS RERUN ---
+    if 'sucesso_qc' in st.session_state:
+        st.success(st.session_state['sucesso_qc'])
+        del st.session_state['sucesso_qc']
     
     if col_save.button("💾 Salvar QC"):
-        if linhas_para_salvar:
-            with st.spinner("Enviando dados..."):
-                try:
-                    # Enviando com timeout para não travar
-                    res = requests.post(SCRIPT_URL, json=linhas_para_salvar, timeout=10)
-                    
-                    if res.status_code == 200:
-                        st.success(f"✅ Sucesso! Resposta do Google: {res.text}")
-                        # Limpa o estado e recarrega
-                        st.session_state.pop('current_seq', None)
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Erro no Google (Status {res.status_code})")
-                        st.info(f"Detalhe técnico: {res.text}")
-                except Exception as e:
-                    st.error(f"❌ Erro de conexão: {str(e)}")
-        else:
-            st.warning("Selecione itens ou escreva uma observação para salvar.")
+            if linhas_para_salvar:
+                with st.spinner("Enviando dados para o Google..."):
+                    try:
+                        res = requests.post(SCRIPT_URL, json=linhas_para_salvar, timeout=10)
+                        
+                        if res.status_code == 200:
+                            # Verifica se o Google retornou uma página de login oculta em HTML
+                            if "<!DOCTYPE html>" in res.text or "login" in res.text.lower():
+                                st.error("❌ O Google retornou uma página de login/bloqueio. O Script não está público!")
+                                st.info("Abra o Apps Script, clique em Implantar > Gerenciar Implantações e garanta que 'Quem tem acesso' esteja como 'Qualquer pessoa' (Anyone).")
+                                with st.expander("Ver detalhes do retorno do Google"):
+                                    st.code(res.text[:1000], language="html")
+                            
+                            # Verifica se o Script rodou mas acusou erro interno de código
+                            elif "Erro" in res.text or "error" in res.text.lower():
+                                st.error("❌ Erro de execução dentro do Google Apps Script:")
+                                st.code(res.text)
+                            
+                            # Se passou nos testes, salvou com sucesso!
+                            else:
+                                st.session_state['sucesso_qc'] = f"🚀 QC da Sequência {seq_id} salvo com sucesso! Retorno: {res.text}"
+                                st.session_state.pop('current_seq', None)
+                                st.rerun()
+                        else:
+                            st.error(f"❌ Erro de servidor HTTP no Google (Status {res.status_code})")
+                            st.text(res.text)
+                    except Exception as e:
+                        st.error(f"❌ Erro crítico de conexão: {str(e)}")
+            else:
+                st.warning("Selecione itens ou escreva uma observação para salvar.")
