@@ -1,61 +1,45 @@
-# config_qc.py
-
-# 1. ETAPAS (Onde o analista está)
-ETAPAS = {
-    "Denoise": ["RotShot", "Stack 2D", "Stack 3D", "Mapa RMS de Amplitude"],
-    "Deghost": ["RotShot", "Stack 2D", "Espectro de Amplitude", "Mapa RMS de Amplitude"],
-    "RMC": ["CMP 2D", "CMP 3D"] # Adicionado CMP 3D aqui para refletir o quadro
+# 1. STEPS
+STEPS = {
+    "Denoise": ["RotShot", "Stack 2D", "Stack 3D", "Amplitude RMS Map"],
+    "Deghost": ["RotShot", "Stack 2D", "Amplitude Spectrum", "Amplitude RMS Map"],
+    "RMC": ["CMP 2D", "CMP 3D"]
 }
 
-# 2. IDENTIFICAÇÃO (O que ele seleciona para analisar, dependendo da etapa)
-ITENS_CHECK = {
-    # Itens do Primeiro Quadro (RotShot)
-    "RotShot": ["Ruído", "SI", "Artefato", "Falta de energia", "Frequência", "Falta de dado", "Geometria", "OK"],
-    
-    # Itens do Segundo Quadro (Stacks)
-    "Stack 2D": ["Artefato", "Múltipla", "Sinal/Ruído", "Continuidade", "Falta de dado", "Frequência", "Pegada de aquisição", "OK"],
-    "Stack 3D": ["Artefato", "Múltipla", "Sinal/Ruído", "Continuidade", "Falta de dado", "Frequência", "Pegada de aquisição", "OK"],
-    
-    # Itens do Terceiro Quadro (CMP 2D / 3D)
-    "CMP 2D": ["Artefato", "Falta de dado", "Frequência", "Mute", "Estática", "Velocidade", "Sinal/Ruído", "Múltipla", "OK"],
-    "CMP 3D": ["Artefato", "Falta de dado", "Frequência", "Mute", "Estática", "Velocidade", "Sinal/Ruído", "Múltipla", "OK"],
-
-    # Extrapolações mantidas
-    "Mapa RMS de Amplitude": ["Artefato", "Sinal/Ruído", "Falta de dado", "Pegada de aquisição", "OK"],
-    "Espectro de Amplitude": ["Largura de Banda", "Corte de Frequência", "OK"]
+# 2. CHECK ITEMS
+CHECK_ITEMS = {
+    "RotShot": ["Noise", "SI", "Artifact", "Power Loss", "Frequency", "Missing Data", "Geometry", "OK"],
+    "Stack 2D": ["Artifact", "Multiple", "Signal/Noise", "Continuity", "Missing Data", "Frequency", "Acquisition Footprint", "OK"],
+    "Stack 3D": ["Artifact", "Multiple", "Signal/Noise", "Continuity", "Missing Data", "Frequency", "Acquisition Footprint", "OK"],
+    "CMP 2D": ["Artifact", "Missing Data", "Frequency", "Mute", "Statics", "Velocity", "Signal/Noise", "Multiple", "OK"],
+    "CMP 3D": ["Artifact", "Missing Data", "Frequency", "Mute", "Statics", "Velocity", "Signal/Noise", "Multiple", "OK"],
+    "Amplitude RMS Map": ["Artifact", "Signal/Noise", "Missing Data", "Acquisition Footprint", "OK"],
+    "Amplitude Spectrum": ["Bandwidth", "Frequency Cut", "OK"]
 }
 
-# 3. CARACTERÍSTICAS (Os inputs que aparecem na tela para cada item selecionado)
-CARACTERISTICAS = {
-    # --- Comuns a RotShot ---
-    "Ruído": ["Frequência", "Intensidade", "Abrangência"],
-    "SI": ["Frequência", "Intensidade", "Abrangência"],
-    "Falta de energia": ["Abrangência"],
-    "Geometria": ["Abrangência"],
-    
-    # --- Comuns a Stack e CMP ---
-    "Artefato": ["Intensidade", "Abrangência"],
-    "Múltipla": ["Intensidade", "Abrangência"],
-    "Sinal/Ruído": ["Qualidade"],
-    "Continuidade": ["Qualidade", "Abrangência"],
-    "Falta de dado": ["Abrangência"],
-    "Frequência": ["Frequência", "Abrangência"],
-    "Pegada de aquisição": ["Intensidade", "Abrangência"],
-
-    # --- Específicos de CMP (Terceiro Quadro) ---
-    "Mute": ["Qualidade"],
-    "Estática": ["Qualidade"],
-    "Velocidade": ["Qualidade"],
-    
-    # --- Padrões extras para evitar erros ---
-    "Largura de Banda": ["Qualidade"],
-    "Padrão": ["Observação"]
+# 3. CHARACTERISTICS
+CHARACTERISTICS = {
+    "Noise": ["Frequency", "Intensity", "Scope"],
+    "SI": ["Frequency", "Intensity", "Scope"],
+    "Power Loss": ["Scope"],
+    "Geometry": ["Scope"],
+    "Artifact": ["Intensity", "Scope"],
+    "Multiple": ["Intensity", "Scope"],
+    "Signal/Noise": ["Quality"],
+    "Continuity": ["Quality", "Scope"],
+    "Missing Data": ["Scope"],
+    "Frequency": ["Frequency", "Scope"],
+    "Acquisition Footprint": ["Intensity", "Scope"],
+    "Mute": ["Quality"],
+    "Statics": ["Quality"],
+    "Velocity": ["Quality"],
+    "Bandwidth": ["Quality"],
+    "Pattern": ["Observation"]
 }
 
-# 4. OPÇÕES (O que aparece dentro das caixinhas de seleção)
-OPCOES = {
-    "Intensidade": ["Baixa", "Média", "Alta"],
-    "Abrangência": ["Pontual", "Faixa", "Dado Todo"],
-    "Frequência": ["Baixa", "Média", "Alta", "Frequência específica"],
-    "Qualidade": ["Ruim", "Regular", "Boa", "Excelente"]
+# 4. OPTIONS
+OPTIONS = {
+    "Intensity": ["Low", "Medium", "High"],
+    "Scope": ["Spot", "Range", "Full Dataset"],
+    "Frequency": ["Low", "Medium", "High", "Specific Frequency"],
+    "Quality": ["Poor", "Fair", "Good", "Excellent"]
 }
